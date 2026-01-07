@@ -74,3 +74,42 @@ Detailed specs are in `spec/`:
 - `architecture.md` - Component specifications and data flow
 - `requirements.md` - Functional and non-functional requirements
 - `test-plan.md` - Test cases and coverage targets
+
+## Changelog Management
+
+This project uses branch-specific changelog files to document iterations.
+
+### Before Starting Work
+1. Check if `changelog/{branch-name}.md` exists for the current branch
+2. If NOT, prompt the user to run: `./scripts/setup-hooks.sh`
+3. The hook will auto-create changelog files for new branches going forward
+
+### After Each Iteration
+When you complete a meaningful unit of work (bug fix, feature, refactor), update the changelog:
+
+1. Get current branch: `git branch --show-current`
+2. Convert to filename: replace `/` with `-` (e.g., `fix/bug` → `fix-bug.md`)
+3. Update `changelog/{branch-name}.md` with:
+   - Iteration number (increment from last)
+   - Objective
+   - Files modified
+   - Changes made
+   - Test results
+
+### Changelog Template
+```
+## Iteration N: [Title]
+
+**Objective:** [What you're trying to achieve]
+
+**Files Modified:**
+- `path/to/file`
+
+### Changes Made:
+1. [Change description]
+
+### Test Results:
+- [Test outcome]
+
+---
+```

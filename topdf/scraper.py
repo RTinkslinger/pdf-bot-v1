@@ -6,7 +6,6 @@ Uses Playwright to scrape DocSend documents and capture page screenshots.
 This module handles:
 - Browser automation with Playwright (headless Chromium)
 - DocSend URL validation
-- Cookie consent dismissal
 - Authentication flow delegation
 - Page navigation and counting
 - Screenshot capture for each page
@@ -56,11 +55,10 @@ class DocSendScraper:
     This class handles the full scraping workflow:
     1. Launch headless browser
     2. Navigate to DocSend URL
-    3. Dismiss cookie consent dialogs
-    4. Handle authentication (email/passcode)
-    5. Detect page count
-    6. Capture screenshots of each page
-    7. Clean up browser resources
+    3. Handle authentication (email/passcode)
+    4. Detect page count
+    5. Capture screenshots of each page
+    6. Clean up browser resources
 
     Usage:
         scraper = DocSendScraper(headless=True)
@@ -152,40 +150,6 @@ class DocSendScraper:
         'canvas',
         'img[class*="page"]',
         'img[class*="slide"]',
-    ]
-
-    # Selectors for cookie consent buttons to dismiss
-    # NOTE: These are broad to handle various cookie consent implementations
-    COOKIE_CONSENT_SELECTORS = [
-        'button:has-text("Accept")',
-        'button:has-text("Accept All")',
-        'button:has-text("Accept Cookies")',
-        'button:has-text("Allow")',
-        'button:has-text("Allow All")',
-        'button:has-text("I Accept")',
-        'button:has-text("OK")',
-        'button:has-text("Got it")',
-        'button:has-text("Agree")',
-        'button:has-text("Continue")',
-        'button:has-text("Close")',
-        '#onetrust-accept-btn-handler',
-        '#accept-cookie-consent',
-        '.onetrust-close-btn-handler',
-        '[data-testid="cookie-accept"]',
-        '[data-testid="accept-cookies"]',
-        '.cookie-consent-accept',
-        '.accept-cookies',
-        '.cookie-accept',
-        '.cc-accept',
-        '.cc-btn',
-        '[aria-label*="accept" i]',
-        '[aria-label*="cookie" i]',
-        '[aria-label*="consent" i]',
-        '.cookie-banner button',
-        '.cookie-notice button',
-        '[class*="cookie"] button',
-        '[class*="consent"] button',
-        '[id*="cookie"] button',
     ]
 
     # ==========================================================================
@@ -406,31 +370,6 @@ class DocSendScraper:
         return False
 
     # ==========================================================================
-    # Cookie Consent Handling
-    # ==========================================================================
-
-    async def _dismiss_cookie_consent(self) -> None:
-        """Attempt to dismiss cookie consent banners.
-
-        Tries each selector in COOKIE_CONSENT_SELECTORS until one succeeds.
-        Exits after first successful click to avoid clicking multiple buttons.
-        """
-        if not self._page:
-            return
-
-        for selector in self.COOKIE_CONSENT_SELECTORS:
-            try:
-                locator = self._page.locator(selector).first
-                if await locator.is_visible(timeout=1000):
-                    await locator.click()
-                    await self._page.wait_for_timeout(500)
-                    if self.verbose:
-                        print(f"Clicked cookie consent button: {selector}")
-                    return  # Exit after first successful click
-            except Exception:
-                continue
-
-    # ==========================================================================
     # Document Loading
     # ==========================================================================
 
@@ -526,9 +465,6 @@ class DocSendScraper:
             except Exception:
                 pass
             await self._page.wait_for_timeout(3000)
-
-            # Dismiss cookie consent that may appear after auth
-            await self._dismiss_cookie_consent()
 
             # Wait for document viewer to appear
             if not await self._wait_for_document():
@@ -748,14 +684,8 @@ class DocSendScraper:
             # Load the document page
             await self._navigate(url)
 
-            # Dismiss cookie consent before auth
-            await self._dismiss_cookie_consent()
-
             # Handle authentication if required
             await self._handle_auth(email, passcode)
-
-            # Dismiss cookie consent again (may reappear after auth)
-            await self._dismiss_cookie_consent()
 
             # Get document metadata
             await self._page.wait_for_timeout(2000)

@@ -36,13 +36,13 @@ class TestCLI:
         result = runner.invoke(topdf, ["--help"])
         assert result.exit_code == 0
         assert "Usage:" in result.output
-        assert "Convert a DocSend link to PDF" in result.output
+        assert "Convert a DocSend document to PDF" in result.output
 
     def test_version_flag(self, runner: CliRunner):
         """Test --version shows version."""
         result = runner.invoke(topdf, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert "1.0.0" in result.output
 
     def test_missing_url(self, runner: CliRunner):
         """Test error when URL is not provided."""
@@ -52,7 +52,7 @@ class TestCLI:
 
     def test_invalid_url_error(self, runner: CliRunner):
         """Test error message for invalid URL."""
-        result = runner.invoke(topdf, ["https://example.com"])
+        result = runner.invoke(topdf, ["https://example.com", "--name", "Test"])
         assert result.exit_code != 0
         assert "Invalid DocSend URL" in result.output
 

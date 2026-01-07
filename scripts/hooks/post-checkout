@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# =============================================================================
+# post-checkout hook: Create changelog file for new branches
+# =============================================================================
+#
+# This hook automatically creates a changelog file in the changelog/
+# directory when a new branch is created. The file is named after
+# the branch and contains a template for documenting iterations.
+#
+# Git passes three arguments to post-checkout:
+#   $1 - ref of the previous HEAD
+#   $2 - ref of the new HEAD
+#   $3 - flag: 1 = branch checkout, 0 = file checkout
+#
+# Installation:
+#   Run ./scripts/setup-hooks.sh to install this hook
+# =============================================================================
+
+PREV_HEAD=$1
+NEW_HEAD=$2
+BRANCH_CHECKOUT=$3
+
+# Only run on branch checkouts (not file checkouts)
+if [ "$BRANCH_CHECKOUT" != "1" ]; then
+    exit 0
+fi
+
+# Get current branch name
+BRANCH_NAME=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Skip if not on a branch (detached HEAD)
+if [ -z "$BRANCH_NAME" ]; then
+    exit 0
+fi
+
+# Skip main/master branches
+if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
+    exit 0
+fi
+
+# Convert branch name to filename (replace / with -)
+CHANGELOG_FILE="changelog/${BRANCH_NAME//\//-}.md"
+
+# Only create if it doesn't exist
+if [ ! -f "$CHANGELOG_FILE" ]; then
+    # Ensure changelog directory exists
+    mkdir -p changelog
+
+    # Create changelog from template
+    cat > "$CHANGELOG_FILE" << EOF
+# Changelog: ${BRANCH_NAME}
+
+## Summary
+[Brief description of what this branch accomplishes]
+
+---
+
+## Iteration 1: [Title]
+
+**Objective:** [What you're trying to achieve]
+
+**Files Modified:**
+- \`path/to/file\`
+
+### Changes Made:
+1. [Change description]
+
+### Test Results:
+- [Test outcome]
+
+---
+EOF
+
+    echo "Created changelog: $CHANGELOG_FILE"
+fi
