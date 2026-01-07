@@ -50,14 +50,38 @@
 | FR-4.3 | Provide clear error messages for failures | Must Have |
 | FR-4.4 | Support `--help` flag with usage documentation | Must Have |
 
+### FR-5: AI Summarization (Optional)
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-5.1 | Prompt for AI summary after PDF conversion | Should Have |
+| FR-5.2 | Extract text from screenshots using OCR | Should Have |
+| FR-5.3 | Generate structured analysis via Perplexity (single call) | Should Have |
+| FR-5.4 | Generate ≤200 character company description | Should Have |
+| FR-5.5 | Assign sector tags (primary + secondary) | Should Have |
+| FR-5.6 | Identify early customer traction | Should Have |
+| FR-5.7 | Find recently funded peers (up to 10) | Should Have |
+| FR-5.8 | Save summary as markdown file alongside PDF | Should Have |
+| FR-5.9 | Summary failure must not break PDF conversion | Must Have |
+
+### FR-6: API Key Management
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-6.1 | Store Perplexity API key in `~/.config/topdf/config.json` | Should Have |
+| FR-6.2 | Support API key via environment variable (PERPLEXITY_API_KEY) | Should Have |
+| FR-6.3 | Prompt for API key if not configured | Should Have |
+| FR-6.4 | Offer to save key after manual entry | Should Have |
+| FR-6.5 | Support `--check-key` and `--reset-key` flags | Should Have |
+
 ## 1.2 Non-Functional Requirements
 
 ### NFR-1: Privacy & Security
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| NFR-1.1 | All processing must happen locally (no third-party APIs) | Must Have |
-| NFR-1.2 | No document data transmitted to external servers | Must Have |
+| NFR-1.1 | Core PDF conversion must happen locally | Must Have |
+| NFR-1.2 | Document data only sent to LLM if user opts in | Must Have |
 | NFR-1.3 | No logging of document content or URLs | Must Have |
+| NFR-1.4 | API keys stored locally only | Should Have |
+| NFR-1.5 | API keys never logged or displayed in full | Should Have |
 
 ### NFR-2: Performance
 | ID | Requirement | Priority |
@@ -115,6 +139,15 @@
 │   Auth       │
 │   Handler    │
 └──────────────┘
+
+[Optional: Post-Conversion Summarization]
+                           │
+                           ▼
+       ┌──────────────┐          ┌──────────────┐
+       │  Summarizer  │◀────────▶│   Config     │
+       │(summarizer.py)│          │ (config.py)  │
+       │  OCR + LLM   │          │  API Keys    │
+       └──────────────┘          └──────────────┘
 ```
 
 ## 2.2 Core Design Decisions
@@ -434,6 +467,19 @@ def topdf(url, email, passcode, name, output, verbose):
 | `_sanitize_filename` | name | str | Remove invalid chars |
 | `_prompt_user` | None | str | Ask user for name |
 
+### 5.2.5 Converter Module Modifications
+
+For summarization support, the `ConversionResult` dataclass includes screenshots:
+
+```python
+@dataclass
+class ConversionResult:
+    pdf_path: Path
+    company_name: str
+    page_count: int
+    screenshots: list[bytes]  # Added for summarization
+```
+
 ## 5.3 Data Flow
 
 ```
@@ -506,7 +552,8 @@ Output: /Users/Aakash/pdfbot/converted PDFs/Company X.pdf
 │   ├── auth.py                    # Authentication handlers
 │   ├── pdf_builder.py             # Screenshot to PDF
 │   ├── name_extractor.py          # Company name extraction
-│   ├── config.py                  # Configuration management
+│   ├── config.py                  # API key management
+│   ├── summarizer.py              # AI summarization (OCR + LLM)
 │   └── exceptions.py              # Custom exceptions
 │
 ├── tests/                          # Test suite
@@ -517,6 +564,8 @@ Output: /Users/Aakash/pdfbot/converted PDFs/Company X.pdf
 │   ├── test_pdf_builder.py
 │   ├── test_name_extractor.py
 │   ├── test_auth.py
+│   ├── test_config.py             # API key management tests
+│   ├── test_summarizer.py         # Summarization tests
 │   └── test_integration.py
 │
 ├── converted PDFs/                 # Output directory
@@ -561,6 +610,15 @@ brew install tesseract
 # After pip install
 playwright install chromium
 ```
+
+### Optional Dependencies (Summarization)
+```
+openai>=1.0.0          # Perplexity API (uses OpenAI-compatible SDK)
+```
+
+**Installation:** `pip install topdf[summarize]`
+
+**Note:** Perplexity API uses the OpenAI SDK with `base_url="https://api.perplexity.ai"`
 
 ---
 
@@ -885,6 +943,73 @@ topdf https://docsend.com/view/TEST_LINK
 
 ---
 
+## Phase 8: AI Summarization (Optional)
+**Goal**: Add optional AI-powered structured analysis with Perplexity (single provider)
+
+### Tasks
+- [ ] 8.1 Create `config.py` for Perplexity API key management
+- [ ] 8.2 Add `SummaryError` and `OCRError` to `exceptions.py`
+- [ ] 8.3 Create `summarizer.py` with OCR + Perplexity (single API call)
+- [ ] 8.4 Modify `converter.py` to include screenshots in result
+- [ ] 8.5 Add interactive summary prompt to `cli.py`
+- [ ] 8.6 Add `--check-key` and `--reset-key` flags to `cli.py`
+- [ ] 8.7 Update `pyproject.toml` with optional dependencies
+- [ ] 8.8 Write tests for `config.py`
+- [ ] 8.9 Write tests for `summarizer.py`
+- [ ] 8.10 Manual E2E testing
+
+### Testing for Phase 8
+```bash
+# Unit tests
+pytest tests/test_config.py -v
+pytest tests/test_summarizer.py -v
+
+# API key management tests
+topdf --check-key
+topdf --reset-key
+
+# Integration test with mocked API
+pytest tests/test_integration.py::test_summary_after_conversion -v
+
+# Manual E2E test (requires Perplexity API key)
+topdf https://docsend.com/view/LINK
+# Answer 'y' to summary prompt
+# Enter Perplexity API key when prompted
+# Verify .md file created with structured content + peers table
+
+# Test graceful degradation
+# Use invalid API key
+# Verify PDF still saved, warning shown
+```
+
+### Exit Criteria
+- [ ] Structured analysis + peer search works with single Perplexity call
+- [ ] Perplexity API key persists correctly in `~/.config/topdf/config.json`
+- [ ] `--check-key` shows masked key status
+- [ ] `--reset-key` clears saved key with confirmation
+- [ ] Summary failure does not break PDF conversion
+- [ ] All tests pass
+
+### Acceptance Criteria (Summarization Feature)
+
+Complete checklist for feature sign-off:
+
+1. [ ] User can generate summary after PDF conversion via interactive prompt
+2. [ ] Summary includes ≤200 character company description
+3. [ ] Summary includes primary and secondary sector tags
+4. [ ] Summary includes early customer traction (yes/no + details)
+5. [ ] Summary includes funded peers table (up to 10 companies)
+6. [ ] Markdown file created with same name as PDF (e.g., `Company.pdf` → `Company.md`)
+7. [ ] Single Perplexity API call handles both analysis and peer search
+8. [ ] API key can be persisted to config file
+9. [ ] API key can be loaded from environment variable
+10. [ ] `--check-key` shows masked key status
+11. [ ] `--reset-key` clears saved key with confirmation
+12. [ ] Summary failure does not affect PDF conversion
+13. [ ] All unit and integration tests pass
+
+---
+
 # 7. Testing Strategy
 
 ## 7.1 Test Pyramid
@@ -954,6 +1079,35 @@ topdf https://docsend.com/view/TEST_LINK
 | `test_invalid_url` | Error for non-DocSend |
 | `test_all_options` | All flags parsed correctly |
 
+### config.py Tests
+| Test Case | Description |
+|-----------|-------------|
+| `test_get_api_key_from_config` | Key retrieved from config file |
+| `test_get_api_key_from_env` | Key retrieved from ENV var |
+| `test_config_precedence` | Config file takes precedence over ENV |
+| `test_get_api_key_missing` | Returns None when no key exists |
+| `test_save_api_key` | Key saved to config file |
+| `test_save_creates_directory` | Creates ~/.config/topdf/ if missing |
+| `test_clear_api_keys` | All keys removed from config |
+| `test_has_api_key_true` | Returns True when key exists |
+| `test_has_api_key_false` | Returns False when no key |
+| `test_get_masked_key` | Returns sk-ant-****...****  format |
+
+### summarizer.py Tests
+| Test Case | Description |
+|-----------|-------------|
+| `test_extract_text_success` | OCR extracts text from screenshots |
+| `test_extract_text_no_tesseract` | Raises OCRError if tesseract missing |
+| `test_extract_text_empty` | Raises OCRError if no text found |
+| `test_max_pages_limit` | Only first 5 pages processed |
+| `test_build_prompt` | Prompt includes text and company name |
+| `test_call_anthropic` | Mock API returns summary |
+| `test_call_openai` | Mock API returns summary |
+| `test_api_error` | Raises SummaryError on API failure |
+| `test_write_summary` | Markdown file created with correct format |
+| `test_write_summary_path` | .md file created alongside PDF |
+| `test_summarize_e2e` | Full flow with mocked LLM |
+
 ## 7.3 Integration Tests
 
 | Test Case | Components | Description |
@@ -963,6 +1117,13 @@ topdf https://docsend.com/view/TEST_LINK
 | `test_full_email_flow` | all + auth | Email-protected end-to-end |
 | `test_name_extraction_integration` | scraper + name_extractor | Name from real page |
 | `test_output_directory_creation` | cli + filesystem | Creates dir if missing |
+| `test_summary_after_conversion` | converter + summarizer | Summary generated after PDF |
+| `test_summary_with_anthropic` | summarizer + API | Anthropic provider works |
+| `test_summary_with_openai` | summarizer + API | OpenAI provider works |
+| `test_summary_failure_graceful` | cli + summarizer | PDF saved even if summary fails |
+| `test_api_key_persistence` | cli + config | Keys saved and loaded |
+| `test_check_key_flag` | cli + config | Shows masked keys |
+| `test_reset_key_flag` | cli + config | Clears saved keys |
 
 ## 7.4 Manual E2E Test Cases
 
@@ -978,6 +1139,14 @@ topdf https://docsend.com/view/TEST_LINK
 | E2E-8 | Duplicate name | Run twice with same URL | Second file has (1) |
 | E2E-9 | Large deck (50+ pages) | `topdf <large_deck_url>` | All pages captured |
 | E2E-10 | Interactive prompt | `topdf <protected_url>` (no flags) | Prompts for credentials |
+| E2E-11 | Generate summary | Convert, say yes to summary prompt | .md file created alongside PDF |
+| E2E-12 | Skip summary | Convert, say no to summary prompt | Only PDF created |
+| E2E-13 | Anthropic provider | Select Anthropic, provide key | Summary generated |
+| E2E-14 | OpenAI provider | Select OpenAI, provide key | Summary generated |
+| E2E-15 | Persist API key | Enter key, save it | Key works on next run |
+| E2E-16 | Check API key | `topdf --check-key` | Shows masked key |
+| E2E-17 | Reset API key | `topdf --reset-key` | Keys cleared with confirmation |
+| E2E-18 | Summary failure | Use invalid API key | Warning shown, PDF still saved |
 
 ## 7.5 Test Data Requirements
 
@@ -1011,6 +1180,7 @@ This specification provides a complete blueprint for building a privacy-preservi
 - Python CLI tool installable via `pip install -e .`
 - Command: `topdf <docsend_url>` with auth and naming options
 - Output: Company-named PDFs in `converted PDFs/` folder
-- 7 implementation phases with testing at each step
+- Optional AI summarization with markdown output
+- 8 implementation phases with testing at each step
 
-**Next step**: Begin Phase 1 implementation.
+**Next step**: Begin Phase 1 implementation (or Phase 8 for summarization feature).

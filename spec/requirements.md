@@ -2,8 +2,9 @@
 
 ## Document Info
 - **Project**: DocSend to PDF Converter (topdf)
-- **Version**: 1.0
+- **Version**: 1.1
 - **Last Updated**: 2025-01-07
+- **Changes**: Added FR-5 (Summarization), FR-6 (API Key Management), updated NFR-1 (Privacy)
 
 ---
 
@@ -49,6 +50,32 @@
 | FR-4.4 | Support `--help` flag with usage documentation | Must Have | Help text displays |
 | FR-4.5 | Support `--version` flag | Should Have | Version number shown |
 
+### FR-5: AI Summarization (Optional)
+
+| ID | Requirement | Priority | Acceptance Criteria |
+|----|-------------|----------|---------------------|
+| FR-5.1 | Prompt for AI summary after PDF conversion | Should Have | Interactive prompt appears |
+| FR-5.2 | Extract text from screenshots using OCR | Should Have | Text extracted from first 5 pages |
+| FR-5.3 | Generate structured company analysis via Perplexity | Should Have | JSON with name, description, sector, customers |
+| FR-5.4 | Generate ≤200 character company description | Should Have | Description meets length requirement |
+| FR-5.5 | Assign sector tags (primary + secondary) | Should Have | Tags from predefined list |
+| FR-5.6 | Identify early customer traction | Should Have | Yes/No with details if available |
+| FR-5.7 | Find recently funded peers via Perplexity | Should Have | Up to 10 peers from last 24 months |
+| FR-5.8 | Save summary as markdown file alongside PDF | Should Have | .md file created with same name |
+| FR-5.9 | Summary failure must not break PDF conversion | Must Have | PDF saved even if summary fails |
+
+### FR-6: API Key Management
+
+| ID | Requirement | Priority | Acceptance Criteria |
+|----|-------------|----------|---------------------|
+| FR-6.1 | Store Perplexity API key in `~/.config/topdf/config.json` | Should Have | Key persists across sessions |
+| FR-6.2 | Support API key via environment variable (PERPLEXITY_API_KEY) | Should Have | ENV var detected and used |
+| FR-6.3 | Config file takes precedence over ENV var | Should Have | Correct priority order |
+| FR-6.4 | Prompt for API key if not configured | Should Have | Masked input prompt shown |
+| FR-6.5 | Offer to save key after manual entry | Should Have | User can choose to persist |
+| FR-6.6 | Support `--check-key` flag to show configured key | Should Have | Masked key display |
+| FR-6.7 | Support `--reset-key` flag to clear saved key | Should Have | Confirmation then deletion |
+
 ---
 
 ## 2. Non-Functional Requirements
@@ -57,10 +84,13 @@
 
 | ID | Requirement | Priority | Acceptance Criteria |
 |----|-------------|----------|---------------------|
-| NFR-1.1 | All processing must happen locally | Must Have | No external API calls |
-| NFR-1.2 | No document data transmitted externally | Must Have | Network traffic verified |
+| NFR-1.1 | Core PDF conversion must happen locally | Must Have | No external API calls for PDF |
+| NFR-1.2 | Document data only sent to LLM if user opts in | Must Have | Explicit consent required |
 | NFR-1.3 | No logging of document content or URLs | Must Have | No sensitive logs |
-| NFR-1.4 | Credentials not stored persistently | Should Have | No credential files |
+| NFR-1.4 | DocSend credentials not stored persistently | Should Have | No credential files |
+| NFR-1.5 | API keys stored locally only | Should Have | Keys in ~/.config/topdf/ |
+| NFR-1.6 | Clear privacy messaging for API key storage | Should Have | User informed of local storage |
+| NFR-1.7 | API keys never logged or displayed in full | Should Have | Masked display only |
 
 ### NFR-2: Performance
 
@@ -132,6 +162,15 @@
 | Tesseract | `brew install tesseract` | OCR engine |
 | Chromium | `playwright install chromium` | Headless browser |
 
+### Optional Dependencies (Summarization)
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| openai | >=1.0.0 | Perplexity API (uses OpenAI-compatible SDK) |
+
+**Installation:** `pip install topdf[summarize]`
+
+**Note:** Perplexity API uses the OpenAI SDK with `base_url="https://api.perplexity.ai"`
+
 ---
 
 ## 6. Glossary
@@ -143,3 +182,9 @@
 | Passcode | Additional password for protected docs |
 | OCR | Optical Character Recognition |
 | Headless browser | Browser without GUI for automation |
+| LLM | Large Language Model (e.g., Claude, GPT) |
+| API Key | Authentication credential for LLM services |
+| Summarization | AI-generated structured analysis from pitch deck |
+| Perplexity | AI search API for finding funded peer companies |
+| Sector Tag | Category classification (e.g., fintech, cybersecurity) |
+| Funded Peers | Similar companies that raised venture funding recently |

@@ -2,8 +2,9 @@
 
 ## Document Info
 - **Project**: DocSend to PDF Converter (topdf)
-- **Version**: 1.0
+- **Version**: 1.1
 - **Last Updated**: 2025-01-07
+- **Changes**: Added Summarizer and Config components, updated exception hierarchy
 
 ---
 
@@ -36,20 +37,38 @@
 │   Handler    │
 │  (auth.py)   │
 └──────────────┘
+
+[Optional: Post-Conversion Summarization]
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                      CLI Layer (Summary Prompt)                   │
+│              "Generate AI summary? [y/N]"                         │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │
+              ┌────────────┴────────────┐
+              │                         │
+              ▼                         ▼
+       ┌──────────────┐          ┌──────────────┐
+       │  Summarizer  │◀────────▶│   Config     │
+       │(summarizer.py)│          │ (config.py)  │
+       │  OCR + LLM   │          │  API Keys    │
+       └──────────────┘          └──────────────┘
 ```
 
 ### 1.2 Component Responsibilities
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
-| CLI | `cli.py` | Parse arguments, invoke converter, display results |
+| CLI | `cli.py` | Parse arguments, invoke converter, display results, summary prompts |
 | Orchestrator | `converter.py` | Coordinate scraper, builder, extractor |
 | Scraper | `scraper.py` | Navigate DocSend, capture screenshots |
 | Auth Handler | `auth.py` | Detect and handle authentication |
 | PDF Builder | `pdf_builder.py` | Convert screenshots to PDF |
 | Name Extractor | `name_extractor.py` | Extract company name |
 | Exceptions | `exceptions.py` | Custom exception classes |
-| Config | `config.py` | Configuration management |
+| Config | `config.py` | API key storage and retrieval |
+| Summarizer | `summarizer.py` | OCR text extraction, LLM summarization |
 
 ---
 
@@ -72,7 +91,8 @@
 │   ├── auth.py                    # Authentication handlers
 │   ├── pdf_builder.py             # Screenshot to PDF
 │   ├── name_extractor.py          # Company name extraction
-│   ├── config.py                  # Configuration management
+│   ├── config.py                  # API key management
+│   ├── summarizer.py              # AI summarization (OCR + LLM)
 │   └── exceptions.py              # Custom exceptions
 │
 ├── tests/                          # Test suite
@@ -83,6 +103,8 @@
 │   ├── test_pdf_builder.py
 │   ├── test_name_extractor.py
 │   ├── test_auth.py
+│   ├── test_config.py             # API key management tests
+│   ├── test_summarizer.py         # Summarization tests
 │   └── test_integration.py
 │
 ├── converted PDFs/                 # Output directory
@@ -297,6 +319,235 @@ class PDFBuildError(TopdfError):
 
 class TimeoutError(TopdfError):
     """Operation timed out."""
+
+class SummaryError(TopdfError):
+    """Failed to generate summary."""
+
+class OCRError(TopdfError):
+    """Failed to extract text via OCR."""
+```
+
+### 3.8 Config Module (`config.py`)
+
+**Purpose**: Manage API keys for LLM providers
+
+**Interface**:
+```python
+CONFIG_PATH: Path = Path.home() / ".config" / "topdf" / "config.json"
+
+def get_api_key(provider: str) -> Optional[str]:
+    """Get API key from config file or environment variable.
+
+    Lookup order:
+    1. Config file (~/.config/topdf/config.json)
+    2. Environment variable (ANTHROPIC_API_KEY or OPENAI_API_KEY)
+
+    Returns:
+        API key string or None if not found
+    """
+
+def save_api_key(provider: str, key: str) -> None:
+    """Save API key to config file.
+
+    Creates config directory if it doesn't exist.
+    """
+
+def clear_api_keys() -> None:
+    """Remove all saved API keys."""
+
+def has_api_key(provider: str) -> bool:
+    """Check if API key exists in config or env."""
+
+def get_masked_key(key: str) -> str:
+    """Return masked version for display (e.g., sk-ant-****...****)."""
+```
+
+**Config File Format**:
+```json
+{
+  "perplexity_api_key": "pplx-..."
+}
+```
+
+### 3.9 Summarizer Module (`summarizer.py`)
+
+**Purpose**: Extract text from screenshots and generate structured analysis with Perplexity
+
+**Interface**:
+```python
+SECTORS = [
+    "cybersecurity", "enterprise_tech", "consumer_tech", "consumer_goods",
+    "fintech", "industrials", "robotics", "space_tech", "developer_tooling"
+]
+
+@dataclass
+class CompanyAnalysis:
+    company_name: str
+    description: str  # ≤200 characters
+    has_customers: bool
+    customer_details: Optional[str]
+    primary_sector: str
+    secondary_sector: Optional[str]
+
+@dataclass
+class FundedPeer:
+    company_name: str
+    round_type: str  # "Seed", "Series A", etc.
+    amount: str  # "$10M"
+    date: str  # "Jan 2024"
+    description: Optional[str]
+
+@dataclass
+class StructuredSummary:
+    company: CompanyAnalysis
+    funded_peers: list[FundedPeer]
+
+class Summarizer:
+    MAX_PAGES_TO_OCR: int = 5
+
+    def __init__(self, perplexity_key: str) -> None:
+        """Initialize with Perplexity API key."""
+
+    def summarize(
+        self,
+        screenshots: list[bytes],
+        company_name: str
+    ) -> StructuredSummary:
+        """
+        Generate structured summary from screenshots using Perplexity.
+
+        Pipeline:
+        1. OCR first N pages using pytesseract
+        2. Send text to Perplexity for analysis + peer search (single call)
+        3. Parse response into StructuredSummary
+        4. Return result
+
+        Raises:
+            OCRError: If text extraction fails
+            SummaryError: If API call fails
+        """
+
+    @staticmethod
+    def write_summary(result: StructuredSummary, pdf_path: Path) -> Path:
+        """Write summary to markdown file alongside PDF.
+
+        Returns:
+            Path to the created .md file
+        """
+```
+
+**Internal Methods**:
+| Method | Purpose |
+|--------|---------|
+| `_check_tesseract` | Verify tesseract is installed |
+| `_extract_text` | OCR screenshots to text |
+| `_call_perplexity` | Single API call for analysis + peers |
+| `_parse_response` | Parse Perplexity response to dataclasses |
+| `_format_markdown` | Generate markdown output |
+
+**Dependencies**: pytesseract, Pillow, openai (for Perplexity)
+
+### 3.10 Perplexity Configuration
+
+#### Provider and Model
+
+| Provider | Model | Purpose |
+|----------|-------|---------|
+| Perplexity | sonar-pro | Deck analysis + funded peer search (single call) |
+
+#### Combined Analysis + Peer Search Prompt
+
+```
+You are analyzing a pitch deck and researching the competitive landscape.
+
+PITCH DECK CONTENT:
+{ocr_text}
+
+Please provide a structured analysis in the following JSON format:
+
+{
+  "company": {
+    "company_name": "The company's name",
+    "description": "What they do in exactly 200 characters or less",
+    "has_customers": true/false,
+    "customer_details": "Names/logos of customers if mentioned, else null",
+    "primary_sector": "One of: cybersecurity, enterprise_tech, consumer_tech, consumer_goods, fintech, industrials, robotics, space_tech, developer_tooling",
+    "secondary_sector": "Second most relevant sector or null"
+  },
+  "funded_peers": [
+    {
+      "company_name": "Competitor name",
+      "round_type": "Seed/Series A/Series B",
+      "amount": "$XM",
+      "date": "Mon YYYY",
+      "description": "One sentence description"
+    }
+  ]
+}
+
+INSTRUCTIONS:
+1. Analyze the pitch deck content to extract company information
+2. Search for up to 10 similar companies that raised Seed, Series A, or Series B rounds in the last 24 months
+3. description must be ≤200 characters
+4. primary_sector MUST be from the allowed list
+5. Return valid JSON only
+```
+
+#### Perplexity API Setup
+
+```python
+from openai import OpenAI
+
+perplexity = OpenAI(
+    api_key=PERPLEXITY_API_KEY,
+    base_url="https://api.perplexity.ai"
+)
+
+response = perplexity.chat.completions.create(
+    model="sonar-pro",
+    messages=[{"role": "user", "content": prompt}]
+)
+```
+
+#### Allowed Sector Tags
+
+```python
+SECTORS = [
+    "cybersecurity",
+    "enterprise_tech",
+    "consumer_tech",
+    "consumer_goods",
+    "fintech",
+    "industrials",
+    "robotics",
+    "space_tech",
+    "developer_tooling"
+]
+```
+
+### 3.11 Summarization Error Handling
+
+| Scenario | Exception | User Message | Behavior |
+|----------|-----------|--------------|----------|
+| Tesseract not installed | `OCRError` | "Tesseract not found. Install with: brew install tesseract" | Skip summary |
+| No text extracted | `OCRError` | "Could not extract text from document" | Skip summary |
+| Missing Perplexity key | `SummaryError` | "Perplexity API key required for summarization" | Prompt for key |
+| Invalid API key | `SummaryError` | "Invalid API key. Please check and try again" | Skip summary |
+| Perplexity API failure | `SummaryError` | "Could not generate summary" | Skip summary |
+| Invalid JSON response | `SummaryError` | "Failed to parse response" | Retry once, then skip |
+
+#### Graceful Degradation
+
+Summary failures must NOT affect PDF conversion:
+
+```python
+try:
+    # OCR + Perplexity analysis (single call)
+    result = await self._call_perplexity(text)
+    self.write_summary(result, pdf_path)
+except (SummaryError, OCRError) as e:
+    console.print(f"[yellow]Warning: Could not generate summary - {e}[/yellow]")
+    # PDF already saved, continue without summary
 ```
 
 ---
@@ -388,6 +639,80 @@ class TimeoutError(TopdfError):
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+### 4.1 Summarization Data Flow (Optional)
+
+After PDF conversion completes, the user is prompted for optional AI summarization:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 1: User Prompt                                                  │
+│   └─→ "Generate AI summary? [y/N]"                                  │
+│   └─→ If 'n', skip to end                                          │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 2: API Key Resolution                                           │
+│   └─→ Check: ~/.config/topdf/config.json                            │
+│   └─→ Check: ENV (PERPLEXITY_API_KEY)                               │
+│   └─→ If missing: Prompt "Enter your Perplexity API key: ****"      │
+│   └─→ Offer: "Save for future use? [y/N]"                           │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Text Extraction (OCR)                                        │
+│   └─→ Load first 5 screenshots from conversion result               │
+│   └─→ pytesseract.image_to_string() on each                        │
+│   └─→ Combine into single text block                                │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 4: Perplexity Analysis (Single Call)                            │
+│   └─→ Send OCR text + analysis prompt to Perplexity API            │
+│   └─→ Perplexity analyzes deck AND searches for funded peers       │
+│   └─→ Parse JSON response: company + funded_peers                   │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 5: Write Markdown                                               │
+│   └─→ Path: "converted PDFs/{company_name}.md"                      │
+│   └─→ Content: Structured summary with peers table                  │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ OUTPUT: Summary saved to converted PDFs/Company X.md                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Output Markdown Format
+
+```markdown
+# {Company Name}
+
+## Overview
+{200 character description of what they do}
+
+## Traction
+**Early Customers:** Yes/No
+{Details if mentioned: customer names, logos, case studies}
+
+## Sector
+**Primary:** {sector}
+**Secondary:** {sector or N/A}
+
+## Funded Peers (24-month lookback)
+| Company | Round | Amount | Date | Description |
+|---------|-------|--------|------|-------------|
+| Peer 1  | Series A | $10M | Jan 2024 | Brief description |
+| ... up to 10 peers ... |
+
+*Data sourced via Perplexity AI. May not be exhaustive.*
+```
+
 ---
 
 ## 5. Sequence Diagram
@@ -431,7 +756,11 @@ TopdfError (base)
 │   ├── PageLoadError
 │   └── ScreenshotError
 ├── PDFBuildError
-└── TimeoutError
+├── TimeoutError
+├── SummaryError
+│   ├── APIKeyError
+│   └── LLMError
+└── OCRError
 ```
 
 ### Retry Policy
@@ -461,8 +790,17 @@ Action: Check your internet connection and try again
 ### Data Handling
 - No document content logged
 - No URLs logged
-- Credentials never persisted
-- All processing local
+- DocSend credentials never persisted
+- Core PDF processing local
+- Document text only sent to LLM if user explicitly opts in
+
+### API Key Security
+- Keys stored in user home directory (`~/.config/topdf/`)
+- Standard file permissions (user read/write only)
+- Keys never logged or displayed in full
+- Masked display format: `sk-ant-****...****`
+- Privacy message shown when saving: "Key saved locally... (not sent anywhere except to the LLM API)"
+- No telemetry or external transmission of keys (except to chosen LLM)
 
 ### Browser Security
 - Headless mode (no visual UI)
@@ -473,6 +811,7 @@ Action: Check your internet connection and try again
 - URL format validated
 - Email format validated (basic)
 - Path traversal prevented
+- API key format validated (basic prefix check)
 
 ---
 

@@ -17,9 +17,10 @@ from typing import Optional
 
 import click
 from rich.console import Console
+from rich.prompt import Confirm, Prompt
 
 from topdf import __version__
-from topdf.exceptions import InvalidURLError, TopdfError
+from topdf.exceptions import InvalidURLError, OCRError, SummaryError, TopdfError
 
 console = Console()
 
@@ -47,12 +48,11 @@ def validate_url(url: str) -> str:
 
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
-@click.argument("url")
+@click.argument("url", required=False)
 @click.option(
     "--name", "-n",
-    required=True,
-    prompt="Enter filename for the PDF",
-    help="Output filename for the PDF (required)"
+    default=None,
+    help="Output filename for the PDF (required for conversion)"
 )
 @click.option(
     "--email", "-e",
@@ -80,19 +80,32 @@ def validate_url(url: str) -> str:
     is_flag=True,
     help="Show browser window for debugging"
 )
+@click.option(
+    "--check-key",
+    is_flag=True,
+    help="Show configured Perplexity API key status"
+)
+@click.option(
+    "--reset-key",
+    is_flag=True,
+    help="Clear saved Perplexity API key"
+)
 @click.version_option(version=__version__, prog_name="topdf")
 def topdf(
-    url: str,
-    name: str,
+    url: Optional[str],
+    name: Optional[str],
     email: Optional[str],
     passcode: Optional[str],
     output: str,
     verbose: bool,
     debug: bool,
+    check_key: bool,
+    reset_key: bool,
 ) -> None:
     """Convert a DocSend document to PDF.
 
     Downloads all pages from a DocSend link and saves them as a PDF file.
+    Optionally generates an AI-powered structured summary using Perplexity.
 
     \b
     ARGUMENTS:
@@ -114,7 +127,35 @@ def topdf(
 
       # Custom output directory:
       topdf https://docsend.com/view/abc123 -n "Deck" -o ~/Desktop
+
+      # Check API key status:
+      topdf --check-key
+
+      # Reset saved API key:
+      topdf --reset-key
     """
+    # Handle --check-key flag
+    if check_key:
+        _handle_check_key()
+        return
+
+    # Handle --reset-key flag
+    if reset_key:
+        _handle_reset_key()
+        return
+
+    # URL and name required for conversion
+    if not url:
+        console.print("[red]Error: URL is required for conversion[/red]")
+        console.print("Usage: topdf URL --name 'Filename'")
+        sys.exit(1)
+
+    if not name:
+        name = Prompt.ask("Enter filename for the PDF")
+        if not name:
+            console.print("[red]Error: Filename is required[/red]")
+            sys.exit(1)
+
     try:
         # Validate URL format
         validate_url(url)
@@ -152,6 +193,9 @@ def topdf(
         console.print(f"  [cyan]{result.pdf_path}[/cyan]")
         console.print(f"  [dim]{result.page_count} pages[/dim]")
 
+        # Offer AI summary
+        _offer_summary(result, verbose)
+
     except TopdfError as e:
         console.print(f"\n[red bold]{e}[/red bold]")
         sys.exit(1)
@@ -163,6 +207,103 @@ def topdf(
         if verbose:
             console.print_exception()
         sys.exit(1)
+
+
+def _handle_check_key() -> None:
+    """Handle --check-key flag: display API key status."""
+    from topdf import config
+
+    if config.has_api_key():
+        masked = config.get_masked_key()
+        source = config.get_key_source()
+        source_label = "config file" if source == "config" else "environment variable"
+        console.print(f"[green]Perplexity API key configured[/green] (from {source_label})")
+        console.print(f"  Key: {masked}")
+    else:
+        console.print("[yellow]No Perplexity API key configured[/yellow]")
+        console.print("  Set via: PERPLEXITY_API_KEY environment variable")
+        console.print("  Or run a conversion and save when prompted")
+
+
+def _handle_reset_key() -> None:
+    """Handle --reset-key flag: clear saved API key."""
+    from topdf import config
+
+    if not config.has_api_key():
+        console.print("[yellow]No API key to reset[/yellow]")
+        return
+
+    if Confirm.ask("Clear saved Perplexity API key?", default=False):
+        config.clear_api_key()
+        console.print("[green]API key cleared[/green]")
+    else:
+        console.print("[dim]Cancelled[/dim]")
+
+
+def _offer_summary(result, verbose: bool) -> None:
+    """Offer to generate AI summary after PDF conversion.
+
+    Args:
+        result: ConversionResult from conversion
+        verbose: Whether to show verbose output
+    """
+    console.print()
+
+    # Ask if user wants summary
+    if not Confirm.ask("Generate AI summary?", default=False):
+        return
+
+    # Import summarization modules
+    from topdf import config, summarizer
+
+    # Get or prompt for API key
+    api_key = config.get_api_key()
+
+    if not api_key:
+        console.print()
+        console.print("[dim]Perplexity API key required for summarization[/dim]")
+        console.print("[dim]Get your key at: https://www.perplexity.ai/settings/api[/dim]")
+        console.print()
+
+        api_key = Prompt.ask("Enter your Perplexity API key")
+
+        if not api_key:
+            console.print("[yellow]No API key provided, skipping summary[/yellow]")
+            return
+
+        # Offer to save
+        if Confirm.ask("Save key for future use?", default=True):
+            config.save_api_key(api_key)
+            console.print(f"[dim]Key saved to {config.CONFIG_FILE}[/dim]")
+
+    # Generate summary
+    console.print()
+    console.print("[cyan]Analyzing deck...[/cyan]")
+
+    try:
+        summary = summarizer.summarize(api_key, result.screenshots)
+        md_path = summarizer.write_summary(summary, result.pdf_path)
+
+        console.print()
+        console.print(f"[green bold]Summary saved to:[/green bold]")
+        console.print(f"  [cyan]{md_path}[/cyan]")
+
+        # Show preview
+        console.print()
+        console.print(f"[bold]{summary.company.company_name}[/bold]")
+        console.print(f"[dim]{summary.company.description}[/dim]")
+        console.print(f"[dim]Sector: {summary.company.primary_sector}[/dim]")
+        if summary.funded_peers:
+            console.print(f"[dim]Found {len(summary.funded_peers)} funded peers[/dim]")
+
+    except OCRError as e:
+        console.print(f"[yellow]Warning: {e.message}[/yellow]")
+        console.print("[dim]PDF was saved successfully[/dim]")
+    except SummaryError as e:
+        console.print(f"[yellow]Warning: {e.message}[/yellow]")
+        if verbose and e.cause:
+            console.print(f"[dim]Cause: {e.cause}[/dim]")
+        console.print("[dim]PDF was saved successfully[/dim]")
 
 
 def main() -> None:

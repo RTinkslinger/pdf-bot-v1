@@ -19,7 +19,9 @@ Exception Hierarchy:
     │   ├── PageLoadError
     │   └── ScreenshotError
     ├── PDFBuildError
-    └── TimeoutError
+    ├── TimeoutError
+    ├── SummaryError
+    └── OCRError
 """
 
 
@@ -165,4 +167,30 @@ class TimeoutError(TopdfError):
             message=f"{operation} timed out after {timeout_seconds} seconds",
             cause="The operation took too long to complete",
             action="Check your internet connection and try again",
+        )
+
+
+# =============================================================================
+# Summarization Errors
+# =============================================================================
+
+class SummaryError(TopdfError):
+    """Raised when AI summarization fails."""
+
+    def __init__(self, reason: str = ""):
+        super().__init__(
+            message="Failed to generate summary",
+            cause=reason or "Summarization failed",
+            action="Check your API key and try again",
+        )
+
+
+class OCRError(TopdfError):
+    """Raised when OCR text extraction fails."""
+
+    def __init__(self, reason: str = ""):
+        super().__init__(
+            message="Failed to extract text from document",
+            cause=reason or "OCR extraction failed",
+            action="Ensure Tesseract is installed: brew install tesseract",
         )

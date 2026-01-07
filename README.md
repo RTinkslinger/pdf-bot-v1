@@ -8,6 +8,7 @@ A command-line tool that converts DocSend document links to local PDF files.
 - **Authentication Support** - Handles email-gated and password-protected documents
 - **Full Document Capture** - Downloads all pages with exact visual fidelity
 - **Simple CLI** - Easy to use command-line interface
+- **AI Summarization** - Optional structured analysis with company overview, sector tags, and funded peer discovery via Perplexity
 
 ## Installation
 
@@ -35,6 +36,9 @@ playwright install chromium
 
 # Optional: Install Tesseract for OCR (macOS)
 brew install tesseract
+
+# Optional: Install AI summarization support
+pip install -e ".[summarize]"
 ```
 
 ## Usage
@@ -69,6 +73,27 @@ topdf https://docsend.com/view/abc123 -n "Pitch Deck" -o ~/Desktop
 topdf https://docsend.com/view/abc123 -n "Pitch Deck" --debug
 ```
 
+### AI Summarization
+
+After PDF conversion, you'll be prompted to generate an AI summary. This requires a Perplexity API key.
+
+```bash
+# Check if API key is configured
+topdf --check-key
+
+# Clear saved API key
+topdf --reset-key
+```
+
+**Get your API key at:** https://www.perplexity.ai/settings/api
+
+The summary includes:
+- Company description and sector classification
+- Customer traction indicators
+- Up to 10 recently funded peer companies (global, last 24 months)
+
+Output is saved as a markdown file alongside the PDF.
+
 ## Command Reference
 
 ```
@@ -81,6 +106,8 @@ Options:
   -o, --output TEXT    Output directory [default: converted PDFs]
   -v, --verbose        Show detailed progress output
   --debug              Show browser window for debugging
+  --check-key          Show configured Perplexity API key status
+  --reset-key          Clear saved Perplexity API key
   --version            Show the version and exit
   -h, --help           Show this message and exit
 ```
@@ -96,6 +123,7 @@ PDFs are saved to the `converted PDFs` folder by default (or your specified outp
 3. Navigates through all pages and captures screenshots
 4. Combines screenshots into a single PDF file
 5. Saves to your specified location
+6. (Optional) OCR extracts text → Perplexity analyzes deck and finds funded peers → Markdown summary saved
 
 ## Requirements
 
@@ -104,7 +132,8 @@ PDFs are saved to the `converted PDFs` folder by default (or your specified outp
 - `img2pdf` - PDF generation
 - `click` - CLI framework
 - `rich` - Progress display
-- `pytesseract` - OCR (optional)
+- `pytesseract` - OCR (optional, for name detection)
+- `openai` - Perplexity API client (optional, for AI summarization)
 
 ## License
 
@@ -112,7 +141,7 @@ MIT License
 
 ## Version
 
-Current version: **1.0.0**
+Current version: **1.0.1**
 
 ---
 
