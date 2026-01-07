@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topdf"
+version = "1.0.0"
+description = "Convert DocSend links to PDF files locally"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "playwright>=1.40.0",
+    "Pillow>=10.0.0",
+    "img2pdf>=0.5.0",
+    "pytesseract>=0.3.10",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+topdf = "topdf.cli:topdf"
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v"
