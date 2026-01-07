@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**topdf** - A Python CLI tool that converts DocSend links to PDF files. Designed for investors to locally convert pitch decks while preserving privacy (no third-party APIs).
+**topdf** - A Python CLI tool that converts DocSend links to PDF files. Designed for investors to locally convert pitch decks while preserving privacy. Optional AI summarization generates structured company analysis (description, sectors, traction) and finds recently funded peer companies using Perplexity.
 
 ## Commands
 
@@ -18,6 +18,8 @@ brew install tesseract  # macOS system dependency
 topdf <docsend_url>
 topdf <url> --email user@example.com --passcode secret
 topdf <url> --name "Custom Name" --output ~/Desktop
+topdf --check-key   # Show configured API keys
+topdf --reset-key   # Clear saved API keys
 
 # Run tests
 pytest tests/ -v
@@ -36,6 +38,7 @@ mypy topdf/
 CLI (cli.py) → Converter (converter.py) → Scraper (scraper.py) → Auth (auth.py)
                                         → PDFBuilder (pdf_builder.py)
                                         → NameExtractor (name_extractor.py)
+            → [Optional] Summarizer (summarizer.py) → Config (config.py)
 ```
 
 **Conversion flow:**
@@ -45,6 +48,9 @@ CLI (cli.py) → Converter (converter.py) → Scraper (scraper.py) → Auth (aut
 4. NameExtractor parses page title (fallback: OCR first slide)
 5. PDFBuilder combines screenshots into PDF using img2pdf
 6. Output saved to `converted PDFs/{company_name}.pdf`
+7. [Optional] User prompted for AI summary:
+   - OCR first 5 pages → Perplexity analyzes deck + finds funded peers (single API call)
+   - Markdown file with company overview + peers table
 
 ## Key Design Decisions
 
@@ -58,22 +64,26 @@ CLI (cli.py) → Converter (converter.py) → Scraper (scraper.py) → Auth (aut
 - **playwright**: Browser automation
 - **click**: CLI framework
 - **img2pdf**: PDF generation
-- **pytesseract**: OCR for name extraction
+- **pytesseract**: OCR for name extraction and summarization
 - **rich**: Progress bars and output
 - **Pillow**: Image processing
+- **openai**: Perplexity API (uses OpenAI-compatible SDK, optional)
 
 ## Exception Hierarchy
 
 All custom exceptions inherit from `TopdfError` in `exceptions.py`:
 - `InvalidURLError`, `AuthenticationError`, `ScrapingError`, `PDFBuildError`, `TimeoutError`
+- `SummaryError`, `OCRError` (for summarization)
 
 ## Specifications
 
 Detailed specs are in `spec/`:
-- `SPEC.md` - Full specification with 7-phase implementation plan
+- `SPEC.md` - Full specification with 8-phase implementation plan
 - `architecture.md` - Component specifications and data flow
 - `requirements.md` - Functional and non-functional requirements
 - `test-plan.md` - Test cases and coverage targets
+
+**API Keys:** Stored in `~/.config/topdf/config.json` (Perplexity only)
 
 ## Changelog Management
 
