@@ -113,3 +113,90 @@ MIT License
 ## Version
 
 Current version: **1.0.0**
+
+---
+
+## How to Use
+
+Step-by-step guide for cloning this repository and running the tool:
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/RTinkslinger/pdf-bot-v1.git
+cd pdf-bot-v1
+```
+
+### 2. Create a Virtual Environment
+
+**macOS/Linux:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows:**
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+### 3. Install the Package
+
+```bash
+pip install -e .
+```
+
+### 4. Install Playwright Browser
+
+```bash
+playwright install chromium
+```
+
+### 5. (Optional) Install Tesseract OCR
+
+**macOS:**
+```bash
+brew install tesseract
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install tesseract-ocr
+```
+
+**Windows:**
+Download installer from: https://github.com/UB-Mannheim/tesseract/wiki
+
+### 6. Run the Tool
+
+```bash
+topdf https://docsend.com/view/YOUR_DOCUMENT_ID --name "Your Filename"
+```
+
+### Quick Start Example
+
+```bash
+# Clone and setup (one-time)
+git clone https://github.com/RTinkslinger/pdf-bot-v1.git
+cd pdf-bot-v1
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+playwright install chromium
+
+# Convert a document
+topdf https://docsend.com/view/abc123 -n "My Document" -e your@email.com
+```
+
+### Troubleshooting
+
+**"command not found: topdf"**
+- Make sure you activated the virtual environment: `source venv/bin/activate`
+
+**"playwright not found"**
+- Run: `playwright install chromium`
+
+**Authentication errors**
+- Some documents require email (`-e`) or passcode (`-p`)
+- Use `--debug` flag to see the browser and troubleshoot
