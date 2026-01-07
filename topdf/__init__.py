@@ -13,10 +13,10 @@ Usage:
     topdf https://docsend.com/view/abc123 -n "My Document"
     topdf https://docsend.com/view/abc123 -n "Doc" -e user@example.com
 
-Version: 1.0.0
+Version: 1.0.1
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from topdf.converter import Converter, ConversionResult
 from topdf.exceptions import (

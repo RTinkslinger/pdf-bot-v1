@@ -42,7 +42,7 @@ class TestCLI:
         """Test --version shows version."""
         result = runner.invoke(topdf, ["--version"])
         assert result.exit_code == 0
-        assert "1.0.0" in result.output
+        assert "1.0.1" in result.output
 
     def test_missing_url(self, runner: CliRunner):
         """Test error when URL is not provided."""
