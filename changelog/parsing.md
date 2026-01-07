@@ -257,3 +257,138 @@ Add AI summarization feature to topdf - enabling optional LLM-powered company ov
 - Ready for Phase 8 implementation
 
 ---
+
+## Iteration 6: Phase 8 Implementation Complete
+
+**Objective:** Implement AI summarization feature with Perplexity (single provider)
+
+**Files Modified:**
+- `topdf/exceptions.py` - Added SummaryError, OCRError exceptions
+- `topdf/config.py` - New file for API key management
+- `topdf/summarizer.py` - New file for OCR + Perplexity integration
+- `topdf/converter.py` - Added screenshots to ConversionResult
+- `topdf/cli.py` - Added summary prompt, --check-key, --reset-key flags
+- `pyproject.toml` - Added optional dependencies
+- `tests/test_config.py` - New test file (20 tests)
+- `tests/test_summarizer.py` - New test file (25 tests)
+
+### Changes Made:
+
+#### Phase 8.1 - Foundation:
+1. Added `SummaryError` and `OCRError` exceptions with proper messages
+2. Created `config.py` with:
+   - API key storage at `~/.config/topdf/config.json`
+   - ENV fallback: `PERPLEXITY_API_KEY`
+   - Functions: `get_api_key()`, `save_api_key()`, `clear_api_key()`, `has_api_key()`, `get_masked_key()`, `get_key_source()`
+
+#### Phase 8.2 - Summarizer Core:
+1. Created dataclasses: `CompanyAnalysis`, `FundedPeer`, `StructuredSummary`
+2. Implemented OCR: `check_tesseract()`, `extract_text()` (uses pytesseract)
+3. Implemented Perplexity API: `call_perplexity()` (uses OpenAI SDK with custom base_url)
+4. Implemented parsing: `_parse_response()` with JSON extraction, validation, sector normalization
+5. Implemented output: `format_markdown()`, `write_summary()`
+6. Main entry point: `summarize(api_key, screenshots)` orchestrates full pipeline
+
+#### Phase 8.3 - Converter Integration:
+1. Updated `ConversionResult` dataclass to include `screenshots: list[bytes]`
+2. Screenshots preserved after PDF generation for optional summarization
+
+#### Phase 8.4 - CLI Integration:
+1. Added `--check-key` flag to display API key status
+2. Added `--reset-key` flag to clear saved API key
+3. Added `_offer_summary()` function with:
+   - Confirmation prompt after PDF conversion
+   - API key prompt if not configured
+   - Option to save key for future use
+   - Summary preview on success
+4. Graceful degradation: summary errors don't affect PDF conversion
+
+#### Phase 8.5 - Dependencies:
+1. Added optional dependency group: `summarize = ["openai>=1.0.0"]`
+2. Added dev dependency group for testing
+
+#### Phase 8.6 - Tests:
+1. Created `test_config.py` with 20 tests covering all config functions
+2. Created `test_summarizer.py` with 25 tests covering:
+   - OCR extraction with tesseract checks
+   - Prompt building with sector list
+   - JSON response parsing with edge cases
+   - Markdown formatting
+   - Perplexity API calls (with mocking)
+   - Full pipeline integration
+3. Tests skip gracefully when optional `openai` package not installed
+
+### Test Results:
+```
+130 passed, 3 skipped in 26.90s
+```
+- 43 config + summarizer tests pass
+- 2 tests skip (require openai package)
+- 1 integration test skips (requires live browser)
+- Full test suite passes
+
+---
+
+## Iteration 7: Enhanced Perplexity Prompt for Better Peer Discovery
+
+**Objective:** Improve funded peer search quality with better prompt engineering and API parameters
+
+**Files Modified:**
+- `topdf/summarizer.py`
+- `tests/test_summarizer.py`
+
+### Changes Made:
+
+#### summarizer.py:
+1. Added `search_domain_filter` with 13 targeted domains:
+   - Funding DBs: crunchbase.com, news.crunchbase.com, pitchbook.com
+   - VC/Startup news: techcrunch.com, vcnewsdaily.com, techfundingnews.com, sifted.eu, fortune.com
+   - Social: linkedin.com, twitter.com
+   - Regional: eu-startups.com, techinasia.com, news.ycombinator.com
+2. Added `search_recency_filter="month"` to prioritize recent results
+3. Rewrote `_build_prompt()` with:
+   - VC analyst persona
+   - Two-task structure (company analysis + peer discovery)
+   - Explicit search strategy (problem → product category → global search)
+   - Geographic coverage (NA, Europe, APAC, MENA, LATAM)
+   - Pre-Seed through Series B funding criteria
+
+#### test_summarizer.py:
+1. Fixed model assertion: `sonar-reasoning-pro` (was `sonar-pro`)
+2. Added assertions for new API parameters (search_domain_filter, search_recency_filter)
+
+### Test Results:
+```
+25 passed in 0.62s
+```
+
+---
+
+## Iteration 8: Fix Perplexity API Parameter Error
+
+**Objective:** Fix summary generation failure caused by incorrect API parameter passing
+
+**Files Modified:**
+- `topdf/summarizer.py`
+- `tests/test_summarizer.py`
+
+### Problem:
+Summary generation failed with `TypeError: create() got an unexpected keyword argument 'search_domain_filter'`.
+
+The OpenAI Python SDK doesn't recognize Perplexity-specific parameters as direct kwargs.
+
+### Changes Made:
+
+#### summarizer.py:
+1. Wrapped `search_domain_filter` and `search_recency_filter` in `extra_body={}` parameter
+2. This is the correct way to pass vendor-specific parameters through the OpenAI SDK
+
+#### test_summarizer.py:
+1. Updated assertions to check `call_kwargs["extra_body"]` instead of direct kwargs
+
+### Test Results:
+```
+25 passed in 0.69s
+```
+
+---

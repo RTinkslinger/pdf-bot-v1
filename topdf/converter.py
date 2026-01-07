@@ -36,10 +36,12 @@ class ConversionResult:
         pdf_path: Path to the generated PDF file
         company_name: Extracted or provided document name
         page_count: Number of pages in the document
+        screenshots: Raw screenshot bytes (for optional summarization)
     """
     pdf_path: Path
     company_name: str
     page_count: int
+    screenshots: list[bytes]
 
 
 class Converter:
@@ -173,4 +175,5 @@ class Converter:
             pdf_path=output_path,
             company_name=company_name,
             page_count=scrape_result.page_count,
+            screenshots=scrape_result.screenshots,
         )
